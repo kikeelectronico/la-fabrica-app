@@ -1,12 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
 import React, {useEffect, useState} from 'react';
-import { StyleSheet, Text, Button, View, PermissionsAndroid, NativeModules, NativeEventEmitter, } from 'react-native';
+import { StyleSheet, Text, Button, View, PermissionsAndroid, NativeModules, NativeEventEmitter } from 'react-native';
 import BleManager from 'react-native-ble-manager';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BleManagerModule = NativeModules.BleManager;
 const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
-
-const BEACON_MAC = ""
 
 export default function App() {
 
@@ -14,6 +13,7 @@ export default function App() {
   const [beacon_rssi, setBeaconRssi] = useState(0)
 
   useEffect(() => {
+    
     if (!bluetooth_started) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION)
       .then((result) => {
@@ -62,8 +62,9 @@ export default function App() {
     return () => clearInterval(find_beacon)
   }, [bluetooth_started])
 
-  const handleDiscoverPeripheral = (peripheral) => {
-    if (peripheral.id == BEACON_MAC) {
+  const handleDiscoverPeripheral = async (peripheral) => {
+    const beacon_mac = await AsyncStorage.getItem("beacon_mac")
+    if (peripheral.id == beacon_mac) {
       console.log('Beacon RSSI', peripheral.rssi);
       if (beacon_rssi !== 0) {
         rssi = (peripheral.rssi + beacon_rssi)/2
