@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "la-fabrica",
+    "slug": "la-fabrica",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ]
+  },
+  "name": "la-fabrica"
+}
