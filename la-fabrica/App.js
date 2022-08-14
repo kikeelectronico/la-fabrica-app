@@ -8,6 +8,8 @@ const BleManagerModule = NativeModules.BleManager;
 const bleManagerEmitter = new NativeEventEmitter(BleManagerModule);
 
 var measured_rssi = []
+var at_home = false
+const rssi_thershold = -90
 
 export default function App() {
 
@@ -19,7 +21,6 @@ export default function App() {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION)
       .then((result) => {
         if (result) {
-          console.log("User accept ACCESS_FINE_LOCATION");
           return PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT)
         } else {
           console.log("User refuse ACCESS_FINE_LOCATION");
@@ -27,7 +28,6 @@ export default function App() {
       })
       .then((result) => {
         if (result) {
-          console.log("User accept BLUETOOTH_CONNECT");
           return PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN)
         } else {
           console.log("User refuse BLUETOOTH_CONNECT");
@@ -35,14 +35,12 @@ export default function App() {
       })
       .then((result) => {
         if (result) {
-          console.log("User accept BLUETOOTH_SCAN");
           return BleManager.start({ showAlert: false })
         } else {
           console.log("User refuse BLUETOOTH_SCAN");
         }
       })  
       .then(() => {
-        console.log("Module initialized");
         bleManagerEmitter.addListener('BleManagerDiscoverPeripheral', handleDiscoverPeripheral)
         bleManagerEmitter.addListener('BleManagerStopScan', handleStopScan)
         setBluetoothStarted(true)
@@ -58,13 +56,9 @@ export default function App() {
   useEffect(() => {
     if (bluetooth_started) {
       var find_beacon = setInterval(() => {
-        console.log("I am lokking for you")
         measured_rssi = []
         BleManager.scan([], 1, false)
-        .then(() => {
-          console.log("Done scanning")
-        })
-      }, 5000);
+      }, 10000);
     }
     
     return () => clearInterval(find_beacon)
@@ -73,14 +67,12 @@ export default function App() {
   const handleDiscoverPeripheral = async (peripheral) => {
     const beacon_mac = await AsyncStorage.getItem("beacon_mac")
     if (peripheral.id == beacon_mac) {
-      console.log('Beacon RSSI', peripheral.rssi);
       measured_rssi.push(peripheral.rssi)
       
     }
   }
 
-  const handleStopScan = () => {
-    console.log(measured_rssi)
+  const handleStopScan = async () => {
     var rssi = 0
     for ( var i = 0; i < measured_rssi.length; i ++) {
       if (rssi !== 0) {
@@ -91,13 +83,36 @@ export default function App() {
       }
     }
     setBeaconRssi(rssi)
-    console.log("rssi updated")
+
+    var at_home_signal = rssi > rssi_thershold
+
+    if(at_home_signal !== at_home) {
+      fetch("https://" + await AsyncStorage.getItem("homeware_domain") + "/api/status/update/", {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + await AsyncStorage.getItem("homeware_token")
+        },
+        body: JSON.stringify({
+          "id": "scene_at_home",
+          "param": "deactivate",
+          "value": !at_home_signal
+        })
+      })
+      .then((response) => response.json())
+      .then((json) => {
+        at_home = at_home_signal
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    }
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.main_text}>La fábrica App</Text>
-      <Text style={styles.beacon_rssi}>{beacon_rssi} dBm</Text>
+      <Text style={[styles.beacon_rssi,{color: beacon_rssi > rssi_thershold ? "green" : "red"}]}>{beacon_rssi} dBm</Text>
     </View>
   );
 }
